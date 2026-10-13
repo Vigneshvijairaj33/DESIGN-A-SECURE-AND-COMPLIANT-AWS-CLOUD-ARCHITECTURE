@@ -1,0 +1,151 @@
+%%{init: {'theme': 'default', 'themeVariables': {'fontSize': '14px'}}}%%
+graph TB
+    %% ─────────────────────────────────────────
+    %% ACTORS
+    %% ─────────────────────────────────────────
+    subgraph ACTORS["👤 Users & Administrators"]
+        Admin["🔑 Admin / DevSecOps<br/>MFA + IAM Role"]
+        Auditor["📋 Read-Only Auditor<br/>IAM Role"]
+        AppWorkload["⚙️ Application Workload<br/>EC2 / Lambda IAM Role"]
+    end
+
+    %% ─────────────────────────────────────────
+    %% IAM LAYER
+    %% ─────────────────────────────────────────
+    subgraph IAM_LAYER["🛡️ IAM — Least-Privilege AuthN/AuthZ"]
+        IAM["AWS IAM<br/>Roles · Policies · Temp Credentials"]
+        KMS["🔐 AWS KMS<br/>CMK Encryption Keys + Rotation"]
+        SecretsManager["🔒 Secrets Manager<br/>Secure Secret Storage"]
+    end
+
+    %% ─────────────────────────────────────────
+    %% AWS ACCOUNT BOUNDARY
+    %% ─────────────────────────────────────────
+    subgraph AWS_ACCOUNT["☁️ AWS Account (Single Region — ap-south-1)"]
+
+        %% VPC
+        subgraph VPC["🌐 Amazon VPC  10.0.0.0/16"]
+
+            subgraph PUBLIC_SUBNET["🟡 Public Subnet 10.0.1.0/24"]
+                NATGateway["🚦 NAT Gateway<br/>(optional — cost)"]
+                BastionNote["📝 No bastion host.<br/>Use SSM Session Manager"]
+            end
+
+            subgraph APP_SUBNET["🔵 Private App Subnet 10.0.2.0/24"]
+                Lambda["⚡ AWS Lambda<br/>Event-Driven Processing"]
+                SSMAgent["🖥️ SSM Agent<br/>Secure Ops Access"]
+            end
+
+            subgraph DATA_SUBNET["🟣 Private Data Subnet 10.0.3.0/24"]
+                GlueJob["🔄 AWS Glue ETL<br/>(optional)"]
+                AthenaRef["🔍 Athena<br/>Query via VPC Endpoint"]
+            end
+
+            SG["🔒 Security Groups<br/>Least-Privilege Inbound/Outbound"]
+            NACL["🚧 Network ACLs<br/>Subnet-Level Defence"]
+            VPCEndpoints["🔗 VPC Endpoints<br/>S3 · KMS · SSM (no IGW needed)"]
+        end
+
+        %% STORAGE LAYER
+        subgraph STORAGE["🗄️ Secure Data Storage — Amazon S3"]
+            S3Raw["📦 s3://…/raw/<br/>Server-Side KMS Encryption<br/>Block Public Access · Versioning"]
+            S3Processed["📦 s3://…/processed/<br/>SSE-KMS · Lifecycle Rules"]
+            S3Curated["📦 s3://…/curated/<br/>SSE-KMS · Athena-Ready Parquet"]
+            S3Logs["📦 s3://…/audit-logs/<br/>CloudTrail · Config · Flow Logs<br/>Object Lock (WORM)"]
+        end
+
+        %% DATA PIPELINE
+        subgraph DATA_PIPELINE["🔧 Data Engineering Pipeline (Python / Glue)"]
+            Ingest["1️⃣ Ingest<br/>generate_events.py · ingest.py"]
+            Validate["2️⃣ Validate<br/>validate.py — Schema · Timestamps · Nulls"]
+            Transform["3️⃣ Transform<br/>transform.py — Normalize · Deduplicate"]
+            QualityReport["4️⃣ Quality Report<br/>quality_report.py"]
+        end
+
+        %% AI ANALYTICS
+        subgraph AI_ANALYTICS["🤖 AI Security Analytics (Python / scikit-learn)"]
+            FeatureEng["5️⃣ Feature Engineering<br/>features.py"]
+            ModelTrain["6️⃣ Model Training<br/>train_model.py — Isolation Forest"]
+            AnomalyDetect["7️⃣ Anomaly Detection<br/>detect_anomalies.py"]
+            ModelEval["8️⃣ Model Evaluation<br/>evaluate_model.py — P · R · F1"]
+            AlertGen["9️⃣ Explainable Alert<br/>Risk Score · Indicators · Steps"]
+        end
+
+        %% SECURITY MONITORING
+        subgraph SECURITY_MON["🔭 Security Monitoring & Governance"]
+            CloudTrail["📜 AWS CloudTrail<br/>Mgmt Events · Log Validation"]
+            AWSConfig["⚙️ AWS Config<br/>Resource Recorder + Managed Rules"]
+            CloudWatch["📊 CloudWatch<br/>Logs · Metrics · Alarms · Dashboard"]
+            IAMAnalyzer["🔬 IAM Access Analyzer<br/>External Access Findings"]
+            GuardDuty["🛡️ GuardDuty<br/>(optional — enable explicitly)"]
+            SecurityHub["🏠 Security Hub CSPM<br/>(optional — enable explicitly)"]
+            SNS["🔔 SNS Topic<br/>Alert Notifications"]
+        end
+
+    end
+
+    %% ─────────────────────────────────────────
+    %% FLOW CONNECTIONS
+    %% ─────────────────────────────────────────
+    Admin -->|"Assume IAM Role + MFA"| IAM
+    Auditor -->|"Read-Only Role"| IAM
+    AppWorkload -->|"Instance/Lambda Role"| IAM
+    IAM --> KMS
+    IAM --> SecretsManager
+
+    IAM --> VPC
+    Lambda --> S3Raw
+    Lambda --> S3Processed
+    GlueJob --> S3Processed
+    GlueJob --> S3Curated
+    AthenaRef --> S3Curated
+
+    S3Raw --> Ingest
+    Ingest --> Validate
+    Validate --> Transform
+    Transform --> QualityReport
+    Transform --> S3Processed
+    QualityReport --> S3Curated
+
+    S3Processed --> FeatureEng
+    FeatureEng --> ModelTrain
+    ModelTrain --> AnomalyDetect
+    AnomalyDetect --> ModelEval
+    AnomalyDetect --> AlertGen
+
+    AlertGen --> CloudWatch
+    AlertGen --> SNS
+
+    VPC --> CloudTrail
+    VPC --> AWSConfig
+    VPC --> CloudWatch
+    VPC --> IAMAnalyzer
+
+    CloudTrail --> S3Logs
+    AWSConfig --> S3Logs
+    CloudWatch --> SNS
+    GuardDuty --> SecurityHub
+    IAMAnalyzer --> SecurityHub
+    SecurityHub --> SNS
+
+    KMS -->|"Encrypts"| S3Raw
+    KMS -->|"Encrypts"| S3Processed
+    KMS -->|"Encrypts"| S3Curated
+    KMS -->|"Encrypts"| S3Logs
+
+    VPCEndpoints -.->|"Private Path"| S3Raw
+    VPCEndpoints -.->|"Private Path"| KMS
+
+    classDef storage fill:#FF9900,color:#000,stroke:#c77700
+    classDef security fill:#DD344C,color:#fff,stroke:#aa0020
+    classDef compute fill:#3F8624,color:#fff,stroke:#2a5c17
+    classDef ai fill:#7B2D8B,color:#fff,stroke:#561f62
+    classDef iam fill:#BF0816,color:#fff,stroke:#8a0610
+    classDef network fill:#2E73B8,color:#fff,stroke:#1a4f88
+
+    class S3Raw,S3Processed,S3Curated,S3Logs storage
+    class CloudTrail,AWSConfig,CloudWatch,GuardDuty,SecurityHub,IAMAnalyzer,SNS security
+    class Lambda,GlueJob,AthenaRef compute
+    class FeatureEng,ModelTrain,AnomalyDetect,ModelEval,AlertGen ai
+    class IAM,KMS,SecretsManager iam
+    class VPC,SG,NACL,VPCEndpoints,NATGateway network

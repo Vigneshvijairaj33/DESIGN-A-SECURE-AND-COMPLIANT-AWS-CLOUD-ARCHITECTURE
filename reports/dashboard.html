@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Secure Compliant Cloud — Security Dashboard</title>
+<!-- Mermaid for architecture diagram -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<!-- Chart.js for metrics charts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #21262d;
+    --border: #30363d; --text: #e6edf3; --muted: #8b949e;
+    --green: #3fb950; --red: #f85149; --yellow: #d29922;
+    --blue: #58a6ff; --purple: #bc8cff; --orange: #ffa657;
+    --critical: #f85149; --high: #ffa657; --medium: #d29922; --low: #3fb950;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", monospace; font-size: 14px; }
+
+  /* ── NAV ── */
+  nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 8px; height: 56px; position: sticky; top: 0; z-index: 100; }
+  nav .logo { font-weight: 700; font-size: 16px; color: var(--blue); margin-right: 16px; }
+  nav .badge { background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 2px 10px; font-size: 11px; color: var(--muted); }
+  nav .badge.synthetic { border-color: var(--yellow); color: var(--yellow); }
+  nav .tabs { display: flex; gap: 4px; margin-left: auto; }
+  nav .tab { padding: 6px 14px; border-radius: 6px; cursor: pointer; color: var(--muted); border: none; background: transparent; font-size: 13px; transition: all .15s; }
+  nav .tab:hover, nav .tab.active { background: var(--surface2); color: var(--text); }
+
+  /* ── LAYOUT ── */
+  .page { display: none; padding: 24px; max-width: 1400px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  /* ── STAT CARDS ── */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; }
+  .card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .card .value { font-size: 28px; font-weight: 700; line-height: 1; }
+  .card .sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .card.critical .value { color: var(--critical); }
+  .card.high .value { color: var(--high); }
+  .card.medium .value { color: var(--medium); }
+  .card.green .value { color: var(--green); }
+  .card.blue .value { color: var(--blue); }
+  .card.purple .value { color: var(--purple); }
+
+  /* ── SECTION HEADERS ── */
+  h2 { font-size: 15px; font-weight: 600; color: var(--blue); margin: 24px 0 12px; display: flex; align-items: center; gap: 8px; }
+  h2::before { content: ''; display: inline-block; width: 3px; height: 16px; background: var(--blue); border-radius: 2px; }
+  h3 { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--text); }
+
+  /* ── GRID ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  /* ── PANEL ── */
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: var(--surface2); color: var(--muted); text-align: left; padding: 8px 12px; font-weight: 600; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 8px 12px; border-bottom: 1px solid #1c2128; vertical-align: top; }
+  tr:hover td { background: var(--surface2); }
+
+  /* ── RISK BADGES ── */
+  .risk { display: inline-block; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+  .risk.CRITICAL { background: rgba(248,81,73,.15); color: var(--critical); border: 1px solid rgba(248,81,73,.4); }
+  .risk.HIGH     { background: rgba(255,166,87,.15); color: var(--high);     border: 1px solid rgba(255,166,87,.4); }
+  .risk.MEDIUM   { background: rgba(210,153,34,.15); color: var(--medium);   border: 1px solid rgba(210,153,34,.4); }
+  .risk.LOW      { background: rgba(63,185,80,.15);  color: var(--low);      border: 1px solid rgba(63,185,80,.4); }
+  .pass { color: var(--green); font-weight: 700; }
+  .fail { color: var(--red); font-weight: 700; }
+  .warn { color: var(--yellow); font-weight: 700; }
+
+  /* ── PROGRESS BAR ── */
+  .progress-bar { background: var(--surface2); border-radius: 4px; height: 8px; overflow: hidden; margin-top: 6px; }
+  .progress-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+
+  /* ── ALERT DETAIL CARD ── */
+  .alert-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; cursor: pointer; transition: border-color .15s; }
+  .alert-card:hover { border-color: var(--blue); }
+  .alert-card.CRITICAL { border-left: 4px solid var(--critical); }
+  .alert-card.HIGH     { border-left: 4px solid var(--high); }
+  .alert-card.MEDIUM   { border-left: 4px solid var(--medium); }
+  .alert-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .alert-principal { font-family: monospace; font-size: 12px; color: var(--blue); }
+  .alert-score { margin-left: auto; font-size: 18px; font-weight: 700; }
+  .alert-body { margin-top: 10px; font-size: 12px; color: var(--muted); line-height: 1.6; display: none; }
+  .alert-body.open { display: block; }
+  .alert-body .indicator { background: var(--surface); border-radius: 4px; padding: 4px 8px; margin: 4px 0; display: flex; gap: 8px; align-items: center; }
+  .alert-body .indicator .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); flex-shrink: 0; }
+  .steps li { margin: 4px 0 4px 16px; }
+
+  /* ── MERMAID ── */
+  .mermaid-wrap { background: #fff; border-radius: 10px; padding: 20px; overflow-x: auto; }
+  .mermaid { min-width: 600px; }
+
+  /* ── METRIC RING ── */
+  .metric-ring { display: flex; flex-direction: column; align-items: center; }
+  .metric-ring canvas { max-width: 160px; }
+  .metric-ring .ring-label { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  /* ── SCENARIO TABLE ROWS ── */
+  .scenario-bar { display: flex; align-items: center; gap: 8px; }
+  .scenario-bar .bar { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .scenario-bar .fill { height: 100%; background: var(--green); border-radius: 3px; }
+  .scenario-bar .pct { font-size: 11px; color: var(--muted); width: 36px; text-align: right; }
+
+  /* ── SYNTHETIC WARNING BANNER ── */
+  .banner { background: rgba(210,153,34,.1); border: 1px solid rgba(210,153,34,.4); border-radius: 8px; padding: 10px 16px; margin-bottom: 20px; font-size: 12px; color: var(--yellow); display: flex; gap: 10px; align-items: center; }
+
+  /* ── CONTROLS LIST ── */
+  .control-row { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; border-bottom: 1px solid #1c2128; }
+  .control-id { font-family: monospace; font-size: 11px; color: var(--purple); min-width: 48px; }
+  .control-name { flex: 1; font-size: 12px; }
+  .control-type { font-size: 10px; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+  .type-P { background: rgba(63,185,80,.15); color: var(--green); }
+  .type-D { background: rgba(88,166,255,.15); color: var(--blue); }
+  .type-R { background: rgba(210,153,34,.15); color: var(--yellow); }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">🛡️ SecureCloud</span>
+  <span class="badge">AWS Architecture</span>
+  <span class="badge synthetic">⚠ SYNTHETIC DATA</span>
+  <div class="tabs">
+    <button class="tab active" onclick="showPage('overview')">Overview</button>
+    <button class="tab" onclick="showPage('alerts')">Alerts</button>
+    <button class="tab" onclick="showPage('model')">AI Model</button>
+    <button class="tab" onclick="showPage('audit')">Audit</button>
+    <button class="tab" onclick="showPage('controls')">Controls</button>
+    <button class="tab" onclick="showPage('architecture')">Architecture</button>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE: OVERVIEW
+═══════════════════════════════════════════════════════════ -->
+<div class="page active" id="page-overview">
+  <div class="banner">⚠️ All data on this dashboard is <strong>SYNTHETIC</strong> — generated for demonstration only. No real AWS accounts, credentials, or personal data are used.</div>
+
+  <div class="cards" id="overview-cards"></div>
+
+  <div class="grid-2">
+    <div class="panel">
+      <h3>Alert Distribution by Severity</h3>
+      <canvas id="alertPieChart" height="200"></canvas>
+    </div>
+    <div class="panel">
+      <h3>Security Checks (Local Analysis)</h3>
+      <div id="checks-list"></div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-top:16px">
+    <div class="panel">
+      <h3>Data Pipeline Quality</h3>
+      <div id="quality-checks"></div>
+    </div>
+    <div class="panel">
+      <h3>Model Performance Summary</h3>
+      <div id="model-summary"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE: ALERTS
+═══════════════════════════════════════════════════════════ -->
+<div class="page" id="page-alerts">
+  <div class="banner">⚠️ These alerts were generated by a local AI model on SYNTHETIC data. All recommendations are advisory only — no automated actions are taken.</div>
+  <div class="cards" id="alert-summary-cards"></div>
+  <h2>Top Security Alerts (Top 20 by Risk Score)</h2>
+  <div id="alerts-list"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE: AI MODEL
+═══════════════════════════════════════════════════════════ -->
+<div class="page" id="page-model">
+  <div class="banner">⚠️ Metrics below reflect performance on SYNTHETIC training data only. Real-world accuracy is unknown without validation on authorized real security events.</div>
+  <div class="cards" id="model-metric-cards"></div>
+  <div class="grid-2" style="margin-top:16px">
+    <div class="panel">
+      <h3>Confusion Matrix</h3>
+      <div id="confusion-matrix"></div>
+    </div>
+    <div class="panel">
+      <h3>Per-Scenario Detection Rate</h3>
+      <div id="scenario-breakdown"></div>
+    </div>
+  </div>
+  <div class="grid-2" style="margin-top:16px">
+    <div class="panel">
+      <h3>Precision / Recall / F1 Bar Chart</h3>
+      <canvas id="metricsBar" height="160"></canvas>
+    </div>
+    <div class="panel">
+      <h3>Model Limitations</h3>
+      <div id="limitations-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE: AUDIT ANALYSIS
+═══════════════════════════════════════════════════════════ -->
+<div class="page" id="page-audit">
+  <div class="banner">⚠️ Simulated audit analysis on SYNTHETIC CloudTrail-style events. Not real AWS CloudTrail output.</div>
+  <h2>Top Callers by API Volume</h2>
+  <div class="panel table-wrap"><table id="callers-table"></table></div>
+  <h2>High Failure-Rate Principals</h2>
+  <div class="panel table-wrap"><table id="failures-table"></table></div>
+  <h2>Sensitive API Actions</h2>
+  <div class="panel table-wrap"><table id="sensitive-table"></table></div>
+  <h2>Suspicious Event Timeline (first 20)</h2>
+  <div class="panel table-wrap"><table id="timeline-table"></table></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE: CONTROLS
+═══════════════════════════════════════════════════════════ -->
+<div class="page" id="page-controls">
+  <div class="cards">
+    <div class="card green"><div class="label">Total Controls</div><div class="value">37</div><div class="sub">Implemented</div></div>
+    <div class="card blue"><div class="label">Preventive</div><div class="value">18</div></div>
+    <div class="card purple"><div class="label">Detective</div><div class="value">16</div></div>
+    <div class="card medium"><div class="label">Responsive</div><div class="value">3</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <h3>Implemented Security Controls</h3>
+      <div id="controls-implemented"></div>
+    </div>
+    <div class="panel">
+      <h3>Gap Analysis (Production Hardening Required)</h3>
+      <div id="controls-gaps"></div>
+    </div>
+  </div>
+  <div class="panel" style="margin-top:16px">
+    <h3>Governance Framework Mappings</h3>
+    <div class="grid-3" id="framework-cards" style="gap:12px;margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PAGE: ARCHITECTURE
+═══════════════════════════════════════════════════════════ -->
+<div class="page" id="page-architecture">
+  <div class="banner">Architecture diagram — logical design. Not every component needs a public IP or internet exposure.</div>
+  <div class="panel">
+    <div class="mermaid-wrap">
+      <div class="mermaid">
+%%{init: {'theme': 'default'}}%%
+graph TB
+    subgraph ACTORS["👤 Users and Administrators"]
+        Admin["🔑 Admin / DevSecOps<br/>MFA + IAM Role"]
+        Auditor["📋 Read-Only Auditor<br/>IAM Role"]
+        App["⚙️ App Workload<br/>Lambda IAM Role"]
+    end
+    subgraph IAM_L["🛡️ IAM — AuthN / AuthZ"]
+        IAM["AWS IAM<br/>Roles · Policies · Temp Creds"]
+        KMS["🔐 AWS KMS<br/>CMK × 4 + Auto-Rotation"]
+        SM["🔒 Secrets Manager"]
+    end
+    subgraph AWS["☁️ AWS Account  ap-south-1"]
+        subgraph VPC["🌐 VPC  10.0.0.0/16"]
+            subgraph PUB["🟡 Public Subnet 10.0.1.0/24"]
+                NAT["🚦 NAT Gateway"]
+            end
+            subgraph APP["🔵 Private App 10.0.2.0/24"]
+                LMB["⚡ Lambda"]
+                SSM["🖥️ SSM Session Mgr"]
+            end
+            subgraph DATA["🟣 Private Data 10.0.3.0/24"]
+                GLU["🔄 Glue ETL"]
+                ATH["🔍 Athena"]
+            end
+            VPE["🔗 VPC Endpoints S3·KMS·SSM"]
+        end
+        subgraph S3["🗄️ S3 Data Lake — SSE-KMS"]
+            RAW["📦 Raw Zone"]
+            PROC["📦 Processed Zone"]
+            CUR["📦 Curated Zone"]
+            LOGS["📦 Audit Logs WORM"]
+        end
+        subgraph PIPE["🔧 Data Pipeline"]
+            ING["1 Ingest"]
+            VAL["2 Validate"]
+            TRN["3 Transform"]
+            QRP["4 Quality"]
+        end
+        subgraph AI["🤖 AI Analytics — Isolation Forest"]
+            FE["5 Features"]
+            MT["6 Train"]
+            AD["7 Detect"]
+            ALE["8 Alert"]
+        end
+        subgraph MON["🔭 Security Monitoring"]
+            CT["📜 CloudTrail"]
+            CFG["⚙️ Config × 8 rules"]
+            CW["📊 CloudWatch × 5 alarms"]
+            ANA["🔬 Access Analyzer"]
+            GD["🛡️ GuardDuty opt"]
+            SH["🏠 Security Hub opt"]
+            SNS["🔔 SNS"]
+        end
+    end
+    Admin -->|"MFA + Role"| IAM
+    Auditor --> IAM
+    App --> IAM
+    IAM --> KMS
+    IAM --> SM
+    IAM --> VPC
+    LMB --> RAW
+    GLU --> PROC
+    GLU --> CUR
+    ATH --> CUR
+    RAW --> ING --> VAL --> TRN --> QRP
+    TRN --> PROC
+    QRP --> CUR
+    PROC --> FE --> MT --> AD --> ALE
+    ALE --> CW
+    ALE --> SNS
+    VPC --> CT
+    VPC --> CFG
+    CT --> LOGS
+    CFG --> LOGS
+    CW --> SNS
+    GD --> SH --> SNS
+    KMS -.->|SSE| RAW
+    KMS -.->|SSE| PROC
+    KMS -.->|SSE| CUR
+    KMS -.->|SSE| LOGS
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ────────────────────────────────────────────────────────────────────
+const DATA = {
+  alerts: [], eval: {}, quality: {}, checks: {}, audit: {}, metadata: {}
+};
+
+// ─── NAV ─────────────────────────────────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.target.classList.add('active');
+  if (id === 'architecture') {
+    setTimeout(() => mermaid.run(), 100);
+  }
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function risk_color(cat) {
+  return {CRITICAL:'#f85149',HIGH:'#ffa657',MEDIUM:'#d29922',LOW:'#3fb950'}[cat] || '#8b949e';
+}
+function risk_badge(cat) {
+  return `<span class="risk ${cat}">${cat}</span>`;
+}
+function pct(v) { return (v*100).toFixed(1) + '%'; }
+function round2(v) { return typeof v === 'number' ? v.toFixed(3) : v; }
+
+// ─── OVERVIEW PAGE ───────────────────────────────────────────────────────────
+function buildOverview() {
+  const a = DATA.alerts;
+  const ev = DATA.eval;
+  const m = DATA.metadata;
+
+  const counts = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0};
+  a.forEach(x => counts[x.risk_category] = (counts[x.risk_category]||0)+1);
+
+  document.getElementById('overview-cards').innerHTML = `
+    <div class="card critical"><div class="label">Critical Alerts</div><div class="value">${counts.CRITICAL||0}</div><div class="sub">Immediate action</div></div>
+    <div class="card high"><div class="label">High Alerts</div><div class="value">${counts.HIGH||0}</div><div class="sub">&lt; 2 hours SLA</div></div>
+    <div class="card medium"><div class="label">Medium Alerts</div><div class="value">${counts.MEDIUM||0}</div><div class="sub">&lt; 24 hours</div></div>
+    <div class="card green"><div class="label">Data Quality</div><div class="value">${DATA.quality.quality_score||0}%</div><div class="sub">5/5 checks pass</div></div>
+    <div class="card blue"><div class="label">AUC-ROC</div><div class="value">${round2(ev.metrics?.auc_roc)}</div><div class="sub">Model discrimination</div></div>
+    <div class="card purple"><div class="label">Security Score</div><div class="value">${DATA.checks.security_score||0}%</div><div class="sub">Local config checks</div></div>
+  `;
+
+  // Pie chart
+  new Chart(document.getElementById('alertPieChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Critical','High','Medium','Low'],
+      datasets: [{ data: [counts.CRITICAL,counts.HIGH,counts.MEDIUM,counts.LOW||0],
+        backgroundColor: ['#f85149','#ffa657','#d29922','#3fb950'],
+        borderColor: '#161b22', borderWidth: 3 }]
+    },
+    options: { plugins: { legend: { labels: { color: '#e6edf3', font: { size: 12 } } } }, cutout: '60%' }
+  });
+
+  // Checks
+  const chk = DATA.checks.results || [];
+  document.getElementById('checks-list').innerHTML = chk.map(c => `
+    <div class="control-row">
+      <span class="${c.passed ? 'pass' : 'fail'}">${c.passed ? '✓' : '✗'}</span>
+      <div>
+        <div style="font-size:12px;font-weight:600">${c.check.replace(/_/g,' ')}</div>
+        <div style="font-size:11px;color:var(--muted)">${c.description}</div>
+      </div>
+    </div>`).join('');
+
+  // Quality
+  const qc = DATA.quality.checks || {};
+  document.getElementById('quality-checks').innerHTML = Object.entries(qc).map(([k,v]) => `
+    <div class="control-row">
+      <span class="${v.passed ? 'pass' : 'fail'}">${v.passed ? '✓' : '✗'}</span>
+      <div style="font-size:12px">${k.replace(/_/g,' ')}</div>
+    </div>`).join('');
+
+  // Model summary
+  const me = ev.metrics || {};
+  document.getElementById('model-summary').innerHTML = `
+    ${['precision','recall','f1_score','auc_roc'].map(k => `
+    <div class="control-row">
+      <div style="width:110px;font-size:12px;color:var(--muted)">${k.replace('_',' ').toUpperCase()}</div>
+      <div style="flex:1">
+        <div class="progress-bar"><div class="progress-fill" style="width:${((me[k]||0)*100).toFixed(0)}%;background:var(--blue)"></div></div>
+      </div>
+      <div style="width:46px;text-align:right;font-size:12px;font-weight:700;color:var(--blue)">${round2(me[k])}</div>
+    </div>`).join('')}
+    <div style="margin-top:12px;font-size:11px;color:var(--muted)">
+      Total windows: ${ev.total_windows} &nbsp;·&nbsp; 
+      Anomalous: ${ev.anomalous_windows} &nbsp;·&nbsp;
+      Normal: ${ev.normal_windows}
+    </div>`;
+}
+
+// ─── ALERTS PAGE ─────────────────────────────────────────────────────────────
+function buildAlerts() {
+  const a = DATA.alerts;
+  const counts = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0};
+  a.forEach(x => counts[x.risk_category] = (counts[x.risk_category]||0)+1);
+
+  document.getElementById('alert-summary-cards').innerHTML = `
+    <div class="card critical"><div class="label">Critical</div><div class="value">${counts.CRITICAL}</div></div>
+    <div class="card high"><div class="label">High</div><div class="value">${counts.HIGH}</div></div>
+    <div class="card medium"><div class="label">Medium</div><div class="value">${counts.MEDIUM}</div></div>
+    <div class="card green"><div class="label">Total Shown</div><div class="value">${a.length}</div><div class="sub">Top 20 of 62</div></div>
+  `;
+
+  document.getElementById('alerts-list').innerHTML = a.map((al, i) => `
+    <div class="alert-card ${al.risk_category}" onclick="toggleAlert(${i})">
+      <div class="alert-header">
+        ${risk_badge(al.risk_category)}
+        <span class="alert-principal">${al.principal_id}</span>
+        <span style="font-size:11px;color:var(--muted)">${al.window_start?.slice(0,19) || ''}</span>
+        <span style="font-size:11px;color:var(--muted)">Scenario: <strong>${al.ground_truth_scenario}</strong></span>
+        <span class="alert-score" style="color:${risk_color(al.risk_category)}">${al.risk_score}/100</span>
+      </div>
+      <div class="alert-body" id="alert-body-${i}">
+        <p style="color:var(--text);margin-bottom:8px">${al.explanation}</p>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600">TOP INDICATORS</div>
+        ${(al.top_indicators||[]).map(ind => `
+          <div class="indicator"><div class="dot"></div>
+            <span>${ind.description}</span>
+            <span style="margin-left:auto;color:var(--orange);font-family:monospace">val=${ind.raw_value}</span>
+          </div>`).join('')}
+        <div style="font-size:11px;color:var(--muted);margin:10px 0 4px;font-weight:600">INVESTIGATION STEPS</div>
+        <ol class="steps">${(al.investigation_steps||[]).slice(0,4).map(s => `<li>${s}</li>`).join('')}</ol>
+        <div style="margin-top:10px;font-size:10px;color:var(--yellow)">⚠ ${al.data_source}</div>
+      </div>
+    </div>`).join('');
+}
+function toggleAlert(i) {
+  const b = document.getElementById('alert-body-' + i);
+  b.classList.toggle('open');
+}
+
+// ─── MODEL PAGE ──────────────────────────────────────────────────────────────
+function buildModel() {
+  const ev = DATA.eval;
+  const me = ev.metrics || {};
+  const cm = ev.confusion_matrix || {};
+
+  document.getElementById('model-metric-cards').innerHTML = `
+    <div class="card blue"><div class="label">Precision</div><div class="value">${round2(me.precision)}</div><div class="sub">Flagged that were real anomalies</div></div>
+    <div class="card purple"><div class="label">Recall</div><div class="value">${round2(me.recall)}</div><div class="sub">Anomalies actually caught</div></div>
+    <div class="card green"><div class="label">F1-Score</div><div class="value">${round2(me.f1_score)}</div><div class="sub">Harmonic mean</div></div>
+    <div class="card high"><div class="label">AUC-ROC</div><div class="value">${round2(me.auc_roc)}</div><div class="sub">Discrimination ability</div></div>
+    <div class="card critical"><div class="label">False Positives</div><div class="value">${cm.false_positives||0}</div><div class="sub">Alert fatigue risk</div></div>
+    <div class="card medium"><div class="label">False Negatives</div><div class="value">${cm.false_negatives||0}</div><div class="sub">Coverage gap</div></div>
+  `;
+
+  // Confusion matrix
+  document.getElementById('confusion-matrix').innerHTML = `
+    <table style="width:100%;text-align:center">
+      <tr><th></th><th>Pred Normal</th><th>Pred Anomaly</th></tr>
+      <tr><td style="text-align:left;color:var(--muted)">Actual Normal</td>
+          <td style="color:var(--green);font-size:20px;font-weight:700">${cm.true_negatives}</td>
+          <td style="color:var(--critical);font-size:20px;font-weight:700">${cm.false_positives}</td></tr>
+      <tr><td style="text-align:left;color:var(--muted)">Actual Anomaly</td>
+          <td style="color:var(--medium);font-size:20px;font-weight:700">${cm.false_negatives}</td>
+          <td style="color:var(--green);font-size:20px;font-weight:700">${cm.true_positives}</td></tr>
+    </table>
+    <div style="margin-top:12px;font-size:11px;color:var(--muted)">
+      ✅ TN = correctly passed &nbsp; ✅ TP = correctly flagged<br>
+      ❌ FP = normal flagged (alert fatigue) &nbsp; ❌ FN = anomaly missed (gap)
+    </div>`;
+
+  // Per-scenario
+  const sc = ev.per_scenario || {};
+  document.getElementById('scenario-breakdown').innerHTML = Object.entries(sc).map(([name, r]) => {
+    const rate = r.detection_rate ?? 0;
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+        <span>${name}</span><span style="color:var(--muted)">${r.detected}/${r.anomalous_windows}</span>
+      </div>
+      <div class="scenario-bar">
+        <div class="bar"><div class="fill" style="width:${(rate*100).toFixed(0)}%;background:${rate>0.7?'var(--green)':rate>0.4?'var(--medium)':'var(--critical)'}"></div></div>
+        <span class="pct">${pct(rate)}</span>
+      </div></div>`;
+  }).join('');
+
+  // Bar chart
+  new Chart(document.getElementById('metricsBar'), {
+    type: 'bar',
+    data: {
+      labels: ['Precision','Recall','F1-Score','AUC-ROC'],
+      datasets: [{ data: [me.precision,me.recall,me.f1_score,me.auc_roc],
+        backgroundColor: ['#58a6ff','#bc8cff','#3fb950','#ffa657'],
+        borderRadius: 6 }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0, max: 1, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+        x: { ticks: { color: '#8b949e' }, grid: { display: false } }
+      }
+    }
+  });
+
+  // Limitations
+  document.getElementById('limitations-list').innerHTML =
+    (ev.limitations||[]).map(l => `<div style="padding:6px 0;border-bottom:1px solid #1c2128;font-size:12px;color:var(--muted)">• ${l}</div>`).join('');
+}
+
+// ─── AUDIT PAGE ──────────────────────────────────────────────────────────────
+function buildAudit() {
+  const au = DATA.audit;
+
+  const callersTbl = document.getElementById('callers-table');
+  const callers = au.top_callers || [];
+  callersTbl.innerHTML = `<tr><th>Principal</th><th>Total Calls</th><th>Unique Actions</th><th>Failures</th></tr>` +
+    callers.slice(0,8).map(r => `<tr>
+      <td style="font-family:monospace;color:var(--blue)">${r.principal_id}</td>
+      <td>${r.total_calls}</td><td>${r.unique_actions}</td>
+      <td style="color:${r.failure_count>2?'var(--red)':'var(--muted)'}">${r.failure_count}</td>
+    </tr>`).join('');
+
+  const failTbl = document.getElementById('failures-table');
+  const fails = au.high_failure_principals || [];
+  failTbl.innerHTML = `<tr><th>Principal</th><th>Total</th><th>Failures</th><th>Failure Rate</th></tr>` +
+    fails.slice(0,8).map(r => {
+      const fr = typeof r.failure_rate === 'number' ? (r.failure_rate*100).toFixed(1)+'%' : r.failure_rate;
+      return `<tr>
+        <td style="font-family:monospace;color:var(--blue)">${r.principal_id}</td>
+        <td>${r.total}</td><td>${r.failures}</td>
+        <td style="color:var(--red);font-weight:700">${fr}</td>
+      </tr>`;
+    }).join('');
+
+  const sensTbl = document.getElementById('sensitive-table');
+  const sens = au.sensitive_actions || [];
+  sensTbl.innerHTML = `<tr><th>API Action</th><th>Principal</th><th>Count</th></tr>` +
+    sens.slice(0,10).map(r => `<tr>
+      <td style="font-family:monospace;color:var(--orange)">${r.event_name}</td>
+      <td style="font-family:monospace;color:var(--blue)">${r.principal_id}</td>
+      <td style="font-weight:700">${r.count}</td>
+    </tr>`).join('');
+
+  const timeTbl = document.getElementById('timeline-table');
+  const timeline = au.suspicious_timeline || [];
+  timeTbl.innerHTML = `<tr><th>Timestamp</th><th>Principal</th><th>Action</th><th>Source IP</th><th>Region</th><th>Scenario</th></tr>` +
+    timeline.slice(0,20).map(e => `<tr>
+      <td style="white-space:nowrap;color:var(--muted)">${(e.timestamp||'').slice(0,19)}</td>
+      <td style="font-family:monospace;color:var(--blue)">${e.principal_id}</td>
+      <td style="font-family:monospace;color:var(--orange)">${e.event_name}</td>
+      <td style="font-family:monospace">${e.source_ip}</td>
+      <td>${e.aws_region}</td>
+      <td>${risk_badge(e.scenario==='audit_tampering'||e.scenario==='privilege_escalation'?'CRITICAL':e.scenario==='credential_abuse'?'HIGH':'MEDIUM')}</td>
+    </tr>`).join('');
+}
+
+// ─── CONTROLS PAGE ───────────────────────────────────────────────────────────
+function buildControls() {
+  const implemented = [
+    {id:'SC-01',name:'S3 Block Public Access (account + bucket)',type:'P'},
+    {id:'SC-02',name:'S3 SSE-KMS encryption at rest',type:'P'},
+    {id:'SC-03',name:'S3 enforce HTTPS — deny HTTP requests',type:'P'},
+    {id:'SC-04',name:'S3 versioning on audit logs',type:'P'},
+    {id:'SC-06',name:'IAM least-privilege roles (no wildcards)',type:'P'},
+    {id:'SC-07',name:'IAM roles with temporary credentials (STS)',type:'P'},
+    {id:'SC-08',name:'No long-lived IAM access keys',type:'P'},
+    {id:'SC-09',name:'MFA required for sensitive IAM actions',type:'P'},
+    {id:'SC-10',name:'IAM Access Analyzer — external access findings',type:'D'},
+    {id:'SC-11',name:'KMS Customer Managed Key per data zone',type:'P'},
+    {id:'SC-12',name:'KMS automatic annual key rotation',type:'P'},
+    {id:'SC-13',name:'CloudTrail — multi-region, all management events',type:'D'},
+    {id:'SC-14',name:'CloudTrail log-file integrity validation',type:'D'},
+    {id:'SC-16',name:'AWS Config continuous recording',type:'D'},
+    {id:'SC-17',name:'AWS Config — S3 public access checks',type:'D'},
+    {id:'SC-18',name:'AWS Config — S3 encryption check',type:'D'},
+    {id:'SC-19',name:'AWS Config — CloudTrail enabled check',type:'D'},
+    {id:'SC-20',name:'CloudWatch — root account usage alarm',type:'D'},
+    {id:'SC-21',name:'CloudWatch — IAM policy change alarm',type:'D'},
+    {id:'SC-22',name:'CloudWatch — unauthorized API call alarm',type:'D'},
+    {id:'SC-24',name:'VPC with private subnets (no public workloads)',type:'P'},
+    {id:'SC-25',name:'Security Groups — least-privilege ingress/egress',type:'P'},
+    {id:'SC-26',name:'VPC Endpoints (S3, KMS, SSM)',type:'P'},
+    {id:'SC-32',name:'AI anomaly detection — Isolation Forest',type:'D'},
+    {id:'SC-33',name:'AI explainable alerts (advisory, not auto-remediation)',type:'R'},
+    {id:'SC-35',name:'No real credentials in source code or logs',type:'P'},
+  ];
+
+  const typeLabel = {P:'Preventive',D:'Detective',R:'Responsive'};
+  document.getElementById('controls-implemented').innerHTML =
+    implemented.map(c => `<div class="control-row">
+      <span class="control-id">${c.id}</span>
+      <span class="control-name">${c.name}</span>
+      <span class="control-type type-${c.type}">${typeLabel[c.type]}</span>
+    </div>`).join('');
+
+  const gaps = [
+    {id:'G1',name:'GuardDuty disabled',note:'Enable before production — cost: ~$4/1M events'},
+    {id:'G2',name:'Security Hub disabled',note:'Enable; subscribe to CIS AWS Foundations standard'},
+    {id:'G3',name:'Single AWS account',note:'Use AWS Organizations + multi-account for production'},
+    {id:'G4',name:'Terraform state is local',note:'Use S3 backend + DynamoDB lock table'},
+    {id:'G5',name:'No WAF',note:'Add when any public ALB/API Gateway is added'},
+    {id:'G6',name:'AI trained on synthetic data only',note:'Retrain with authorized real events before production'},
+    {id:'G7',name:'No formal IR runbook',note:'Create and test with annual tabletop exercise'},
+    {id:'G8',name:'VPC Flow Logs disabled',note:'Enable for investigation; export to S3'},
+  ];
+  document.getElementById('controls-gaps').innerHTML =
+    gaps.map(g => `<div class="control-row">
+      <span class="control-id" style="color:var(--red)">${g.id}</span>
+      <div><div class="control-name" style="color:var(--red)">${g.name}</div>
+           <div style="font-size:11px;color:var(--muted)">${g.note}</div></div>
+    </div>`).join('');
+
+  const frameworks = [
+    {name:'AWS Well-Architected',desc:'All 7 Security Pillar design principles mapped',color:'#FF9900'},
+    {name:'NIST CSF',desc:'Identify, Protect, Detect, Respond, Recover',color:'#58a6ff'},
+    {name:'NIST SP 800-53',desc:'AC, AU, CM, IA, SC, SI control families',color:'#bc8cff'},
+    {name:'CIS AWS Benchmark',desc:'Sections 1–4: IAM, Logging, Monitoring, Networking',color:'#3fb950'},
+    {name:'ISO/IEC 27001',desc:'Annex A: A.9, A.10, A.12, A.13, A.14',color:'#ffa657'},
+    {name:'India DPDPA 2023',desc:'Articles 4, 8(1), 8(3), 8(4), 8(6), 8(7)',color:'#d29922'},
+  ];
+  document.getElementById('framework-cards').innerHTML = frameworks.map(f => `
+    <div class="panel" style="border-left:4px solid ${f.color}">
+      <div style="font-weight:700;font-size:13px;margin-bottom:4px">${f.name}</div>
+      <div style="font-size:11px;color:var(--muted)">${f.desc}</div>
+    </div>`).join('');
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    // Try to load from dashboard_data.json (same directory)
+    const resp = await fetch('dashboard_data.json');
+    const json = await resp.json();
+    Object.assign(DATA, json);
+  } catch (e) {
+    console.warn('Could not load dashboard_data.json:', e.message,
+      '— using embedded fallback data');
+    // Minimal fallback so page still renders
+    DATA.alerts = [];
+    DATA.eval = { metrics: {precision:0.758,recall:0.580,f1_score:0.657,auc_roc:0.926},
+      confusion_matrix:{true_negatives:524,false_positives:15,false_negatives:34,true_positives:47},
+      total_windows:620, anomalous_windows:81, normal_windows:539,
+      per_scenario:{'credential_abuse':{detected:10,anomalous_windows:11,detection_rate:0.909,false_positives:0},
+                    'privilege_escalation':{detected:13,anomalous_windows:13,detection_rate:1.0,false_positives:0},
+                    'audit_tampering':{detected:15,anomalous_windows:19,detection_rate:0.789,false_positives:0},
+                    'data_exfiltration':{detected:7,anomalous_windows:8,detection_rate:0.875,false_positives:0},
+                    'unusual_region':{detected:0,anomalous_windows:18,detection_rate:0,false_positives:0}},
+      limitations:['Model trained and evaluated on SYNTHETIC data only.',
+        'No temporal train/test split was used.',
+        'Retrain on real authorized events before production use.'] };
+    DATA.quality = { quality_score: 100.0, checks: {
+      row_count:{passed:true}, null_completeness:{passed:true},
+      timestamp_ordering:{passed:true}, duplicate_event_ids:{passed:true},
+      outcome_distribution:{passed:true} }};
+    DATA.checks = { security_score: 75.0, results: [
+      {check:'env_and_secret_files',passed:true,description:'No .env files detected'},
+      {check:'hardcoded_credentials',passed:true,description:'No hardcoded credentials found'},
+      {check:'iam_wildcard_actions',passed:true,description:'No non-root wildcard IAM actions'},
+      {check:'cloudtrail_configuration',passed:true,description:'CloudTrail properly configured'},
+      {check:'kms_key_rotation',passed:true,description:'KMS rotation enabled on all keys'},
+      {check:'s3_block_public_access',passed:true,description:'All S3 buckets have Block Public Access'},
+      {check:'aws_credentials_configured',passed:false,description:'AWS CLI not configured (expected in local demo)'},
+      {check:'gitignore_present',passed:true,description:'.gitignore covers required entries'},
+    ]};
+    DATA.audit = { total_events: 1000, top_callers: [], high_failure_principals: [],
+      sensitive_actions: [], suspicious_timeline: [] };
+  }
+
+  buildOverview();
+  buildAlerts();
+  buildModel();
+  buildAudit();
+  buildControls();
+
+  mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+}
+
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

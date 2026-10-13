@@ -1,0 +1,21 @@
+##############################################################################
+# terraform.tfvars.example
+# Copy this file to terraform.tfvars and fill in your values.
+# NEVER commit terraform.tfvars to source control — it is in .gitignore
+##############################################################################
+
+aws_region   = "ap-south-1"
+environment  = "dev"
+project_name = "scc"
+owner        = "YourTeamName"
+
+# Email to receive CloudWatch security alarm notifications
+alarm_email = "your-email@example.com"
+
+# Optional features — set true only after reviewing cost implications
+enable_vpc_flow_logs = false
+enable_guardduty     = false
+enable_security_hub  = false
+
+# Log retention in days (90 days is a common baseline)
+log_retention_days = 90
